@@ -14,6 +14,10 @@ class Store:
         self._tables: dict[str, list[dict[str, Any]]] = {
             name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
         }
+        # 偏移量提交台账与分区推进进度：独立于 offset_manager 的示例 CRUD 数据，
+        # 由 OffsetCommitLedger 维护，保证提交记录与进度数据同库入链、一致变更。
+        self._tables.setdefault("offset_commit_receipts", [])
+        self._tables.setdefault("offset_partition_progress", [])
 
     def module_names(self) -> list[str]:
         return sorted(self._tables)

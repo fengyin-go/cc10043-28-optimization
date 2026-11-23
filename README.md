@@ -71,6 +71,33 @@ npm run dev
 | 消息载荷存储 | `payload_store` | 原始载荷 | 采集批次、消息ID、原始载荷 |
 | 吞吐量告警 | `throughput_alarm` | 告警规则 | 规则名称、监控数据源、吞吐量下限 |
 
+## 偏移量提交台账
+
+`offset_manager` 在通用 CRUD 之外提供一套与进度数据同库入链的提交台账，解决「重复提交与
+新进度分不清、旧回执和新进度对不上」的问题。前端入口在侧边栏「偏移量提交台账」
+（路由 `/offset-ledger`），后端固定前缀 `/api/offset-commits`：
+
+| 接口 | 作用 |
+| --- | --- |
+| `POST /submit` | 提交一次偏移量推进，按分区分配独立提交编号并入链 |
+| `POST /acknowledge` | 进度签收，按推进链顺序结算可见偏移，重复签收幂等 |
+| `POST /lookup` | 提交方重新进入时凭幂等键查询哪一次已经生效 |
+| `GET /progress` | 各分区已收偏移、可见偏移、下一提交编号 |
+| `GET /receipts` | 提交回执与重复归档留痕 |
+| `GET /chain` | 单个分区推进链顺序、签收情况与可见推进数 |
+| `POST /reset` | 清空台账，供场景演练重新开始 |
+
+一致性规则：
+
+- 每个「消费组 + Topic + 分区」各有独立提交编号和推进链，两个分区互不串号。
+- 同一确认（group/topic/partition/offset/source 相同）重复送达只认第一次，重复请求归档到
+  首次回执（`duplicate_count`、`archived_attempts`），不新增链上记录、不动进度。
+- 相同偏移量但来源不同的确认各自有独立回执与归属（幂等键含 source）。
+- 签收按提交编号顺序生效：前序未签收会挡住后续提交，可见提交不跳过尚未交接的进度；
+  迟到签收到达后连续补账，可见偏移单调推进、绝不回退。
+
+场景演练脚本：`python3 -I backend/tests/test_offset_commit_ledger.py`
+
 ## 约定
 
 - 全部模块共享`frontend/src/views/WorkbenchView.vue|tsx`和一套资源路由。
